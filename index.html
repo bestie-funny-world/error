@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>System Terminal</title>
+
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: #020303;
+    color: #00ff66;
+    font-family: Consolas, "Courier New", monospace;
+    overflow: hidden;
+}
+
+.terminal {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    padding: 22px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background:
+        radial-gradient(ellipse at center, #07140c 0%, #020303 85%);
+    font-size: clamp(12px, 1.7vw, 17px);
+    line-height: 1.7;
+    scrollbar-width: none;
+}
+
+.terminal::-webkit-scrollbar {
+    display: none;
+}
+
+.line {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    animation: appear 0.12s ease-out;
+}
+
+.green {
+    color: #00ff66;
+    text-shadow: 0 0 8px #00ff66;
+}
+
+.red {
+    color: #ff2020;
+    font-weight: bold;
+    text-shadow: 0 0 9px red;
+}
+
+.yellow {
+    color: #ffe600;
+    text-shadow: 0 0 8px #ffe600;
+}
+
+.dim {
+    color: #8ba995;
+}
+
+@keyframes appear {
+    from {
+        opacity: 0;
+        transform: translateX(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Screen Shake */
+
+.shake {
+    animation: shake 0.12s linear 2;
+}
+
+@keyframes shake {
+    0% { transform: translate(0,0); }
+    20% { transform: translate(-4px,2px); }
+    40% { transform: translate(4px,-2px); }
+    60% { transform: translate(-3px,-1px); }
+    80% { transform: translate(3px,2px); }
+    100% { transform: translate(0,0); }
+}
+
+/* Glitch */
+
+.glitch {
+    animation: glitch 0.15s infinite;
+}
+
+@keyframes glitch {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.topbar {
+    position: fixed;
+    top: 10px;
+    right: 12px;
+    z-index: 10;
+    display: flex;
+    gap: 8px;
+}
+
+button {
+    background: #101a14;
+    color: #00ff66;
+    border: 1px solid #00ff66;
+    padding: 8px 12px;
+    font-family: inherit;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+button:hover {
+    background: #00ff66;
+    color: black;
+}
+
+.terminal.error-mode {
+    background:
+        radial-gradient(ellipse at center, #200505 0%, #020303 85%);
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="topbar">
+    <button onclick="restart()">RESTART</button>
+    <button onclick="fullscreen()">FULLSCREEN</button>
+</div>
+
+<div class="terminal" id="terminal"></div>
+
+<script>
+
+/* ==================================
+   TERMINAL CONFIGURATION
+================================== */
+
+const terminal = document.getElementById("terminal");
+
+const CONFIG = {
+    greenSpeed: 65,
+    errorSpeed: 95,
+    greenDuration: 2200,
+    shakeEnabled: true,
+    vibrationEnabled: true,
+    maxLines: 180
+};
+
+let timer;
+let errorIndex = 0;
+let greenIndex = 0;
+let running = false;
+
+
+/* ==================================
+   GREEN STARTUP LOGS
+================================== */
+
+const greenLogs = [
+
+"[11:09:29 PM] security :: initializing system [OK]",
+"→ Loading core components...",
+"✓ component.js successfully loaded",
+"✓ Resolving dependencies: compiler@4.2.1",
+"[11:09:29 PM] router :: syncing modules [READY]",
+"✓ api/runtime.js processed successfully (146ms)",
+"✓ checksum verified :: index.js :: 8483",
+"✓ checksum verified :: component.js :: 2781",
+"[11:09:30 PM] auth :: syncing main.js [READY]",
+"✓ Authentication successful",
+"✓ Security protocols activated",
+"→ Connecting to database...",
+"✓ Database connection established",
+"[11:09:30 PM] services :: initializing modules [OK]",
+"✓ Validation check #4600 passed",
+"✓ server.js processed successfully",
+"✓ Cache hit :: components :: 93%",
+"→ Resolving dependency: runtime@1.9.7",
+"✓ Session initialized successfully",
+"[11:09:31 PM] security :: connecting utils.js [SUCCESS]",
+"✓ All systems operational [OK]",
+"✓ Main process running...",
+"✓ System integrity verified"
+
+];
+
+
+/* ==================================
+   RED ERROR LOGS
+================================== */
+
+const errorLogs = [
+
+"⚠ WARNING :: Unexpected system response detected!",
+"‼ CRITICAL ERROR :: Module synchronization failed!",
+"🚫 SECURITY ALERT :: Invalid configuration detected!",
+"⚠ ERROR CODE :: 0x8004F21",
+"‼ WARNING :: Connection unstable!",
+"🚫 SYSTEM FAILURE :: Runtime exception detected!",
+"⚠ ERROR :: Database synchronization failed!",
+"‼ CRITICAL WARNING :: Multiple errors detected!",
+"🚫 ALERT :: System integrity compromised!",
+"⚠ FATAL ERROR :: Unexpected exception!",
+"‼ SECURITY BREACH SIMULATION :: Access validation failed!",
+"⚠ WARNING :: Memory allocation error!",
+"🚫 ERROR :: Core module not responding!",
+"‼ CRITICAL FAILURE :: Process terminated unexpectedly!",
+"⚠ ERROR :: Invalid response received!",
+"🚫 SYSTEM ALERT :: Multiple failures detected!",
+"‼ WARNING :: Recovery process unsuccessful!",
+"⚠ FATAL EXCEPTION :: Runtime interrupted!",
+"🚫 ERROR :: Service unavailable!",
+"‼ CRITICAL ERROR :: System shutdown initiated!"
+
+];
+
+
+/* ==================================
+   ADD TERMINAL LINE
+================================== */
+
+function addLine(text, type = "green") {
+
+    const line = document.createElement("div");
+
+    line.className = "line " + type;
+
+    const time = new Date().toLocaleTimeString();
+
+    line.textContent = text.includes("[")
+        ? text
+        : `[${time}] ${text}`;
+
+    terminal.appendChild(line);
+
+    // Keep terminal performance smooth
+    while (terminal.children.length > CONFIG.maxLines) {
+        terminal.removeChild(terminal.firstChild);
+    }
+
+    // Automatic scrolling
+    terminal.scrollTop = terminal.scrollHeight;
+}
+
+
+/* ==================================
+   GREEN STARTUP ANIMATION
+================================== */
+
+function startGreen() {
+
+    if (!running) return;
+
+    if (greenIndex < greenLogs.length) {
+
+        addLine(greenLogs[greenIndex], "green");
+
+        greenIndex++;
+
+        timer = setTimeout(startGreen, CONFIG.greenSpeed);
+
+    } else {
+
+        timer = setTimeout(startErrors, CONFIG.greenDuration);
+
+    }
+}
+
+
+/* ==================================
+   SCREEN SHAKE
+================================== */
+
+function shakeScreen() {
+
+    if (!CONFIG.shakeEnabled) return;
+
+    terminal.classList.remove("shake");
+
+    void terminal.offsetWidth;
+
+    terminal.classList.add("shake");
+
+    setTimeout(() => {
+        terminal.classList.remove("shake");
+    }, 300);
+
+}
+
+
+/* ==================================
+   VIBRATION
+================================== */
+
+function vibrate() {
+
+    if (
+        CONFIG.vibrationEnabled &&
+        "vibrate" in navigator
+    ) {
+        navigator.vibrate(100);
+    }
+
+}
+
+
+/* ==================================
+   ERROR ANIMATION
+================================== */
+
+function startErrors() {
+
+    if (!running) return;
+
+    terminal.classList.add("error-mode");
+
+    addLine(
+        "‼ SYSTEM ALERT :: UNEXPECTED ERRORS DETECTED ‼",
+        "red glitch"
+    );
+
+    errorIndex = 0;
+
+    showErrors();
+
+}
+
+
+function showErrors() {
+
+    if (!running) return;
+
+    const message = errorLogs[
+        errorIndex % errorLogs.length
+    ];
+
+    const isCritical = errorIndex % 3 === 0;
+
+    addLine(
+        message,
+        isCritical ? "red glitch" : "yellow"
+    );
+
+    shakeScreen();
+
+    vibrate();
+
+    errorIndex++;
+
+    // Fast continuous errors
+    timer = setTimeout(
+        showErrors,
+        CONFIG.errorSpeed
+    );
+
+}
+
+
+/* ==================================
+   RESTART
+================================== */
+
+function restart() {
+
+    clearTimeout(timer);
+
+    running = false;
+
+    terminal.innerHTML = "";
+
+    terminal.classList.remove(
+        "error-mode",
+        "shake"
+    );
+
+    greenIndex = 0;
+    errorIndex = 0;
+
+    setTimeout(() => {
+
+        running = true;
+
+        addLine(
+            "SYSTEM BOOT :: INITIALIZING...",
+            "green"
+        );
+
+        startGreen();
+
+    }, 150);
+
+}
+
+
+/* ==================================
+   FULLSCREEN
+================================== */
+
+function fullscreen() {
+
+    if (!document.fullscreenElement) {
+
+        document.documentElement.requestFullscreen?.();
+
+    } else {
+
+        document.exitFullscreen?.();
+
+    }
+
+}
+
+
+/* ==================================
+   START AUTOMATICALLY
+================================== */
+
+restart();
+
+</script>
+
+</body>
+</html>
